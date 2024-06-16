@@ -1,0 +1,345 @@
+---
+title: "DEG-TCGA"
+author: "Bruno Rodrigo Assunção"
+date: "2024-05-02"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+# Expressão Diferencial de Genes em Câncer de Mama: workflow bioinformático na linguagem de programação R
+
+Esse é um workflow escrito na linguagem de programação R para análise de genes diferencialmente expressos de glicosiltransferases em Transcriptoma de Cancer de Mama obtidos a partir do repositorio [ICGC](https://dcc.icgc.org/ "ICGC") Data Portal.
+
+**Dependências:**
+
+```{r include=FALSE}
+library("qpcR") 
+library("DESeq2") 
+library("dplyr") 
+library("edgeR")
+library("ggplot2") 
+library(tidyverse) 
+```
+
+## 00 Entrada de dados
+
+```{r include=FALSE}
+rna <- read.delim("D:/brca_eua_atual/exp_seq.BRCA-US.tsv") 
+info_amostras_artigo <- read.csv("D:/brca_eua_atual/info_amostras_artigo.csv")
+```
+
+## Manter Somente os genes das glycosiltransferases
+
+Selecionamos apenas alguns genes de interesse. Os genes foram selecionados da forma
+
+à seguir à partir da lista abaixo.
+
+```{r include=FALSE}
+rna <- as.data.frame(rna) 
+rna <- rna[rna$gene_id %in% 
+             c("ALG10B","ALG6",  "ALG8",  "A4GALT","A4GNT", "B3GAT1","B3GAT2","B3GAT3","B3GALNT1","B3GALNT2","B3GLCT","B3GALT1", "B3GALT2","B3GALT4","B3GALT5","B3GALT6","B3GALT9","B3GNT2", "B3GNT3","B3GNT4","B3GNT5","B3GNT6","B3GNT7","B3GNT8","B3GNT9","CHPF",  "CHPF2","CHSY1", "CHSY3","C1GALT1","LFNG",  "MFNG","RFNG","B4GALNT1","B4GALNT2","B4GALNT3", "B4GALNT4","B4GALT1", "B4GALT2", "B4GALT3", "B4GALT4", "B4GALT5", "B4GALT6", "B4GALT7","CHPF","CHPF2", "CHSY1", "CHSY3", "CSGALNACT1", "CSGALNACT2", "COLGALT1","COLGALT2", "ALG3",  "ALG9", "ALG12", "PIGB",  "PIGM",  "PIGV",  "PIGZ",  "POMT1", "POMT2", "EXTL1", "EXTL2","EXTL3", "EXT1",  "EXT2",  "FUT1",  "FUT2",  "FUT3", "FUT4",  "FUT5",  "FUT6", "FUT7",  "FUT8",  "FUT9",  "FUT10", "FUT11", "POFUT1","POFUT2","GCNT1", "GCNT2","GCNT3", "GCNT4", "GCNT7", "XYLT1", "XYLT2", "PYGB",  "PYGL",  "PYGM",  "ALG5", "B3GNTL1", "DPM1",  "HAS1",  "HAS2",  "HAS3",  "ABO","A3GALT2", "GBGT1", "GLT6D1", "GLT8D1","GLT8D2","GXYLT1","GXYLT2","GYG1",  "GYG2",  "LARGE1","LARGE2","RXYLT1", "XXYLT1","POGLUT1", "POGLUT2", "POGLUT3", "ALG1",  "ALG1L", "ALG1L2","ALG2",  "ALG11","GLT1D1","GTDC1", "GYS1",  "GYS2",  "PIGA",  "MGAT1",  "MGAT2",  "MGAT3",  "MGAT4A","MGAT4B", "MGAT4C", "MGAT4D", "MGAT4EP","MGAT4FP","MGAT5",  "MGAT5B", "EOGT","OGT","POMGNT1","POMGNT2","GALNTL5","GALNTL6","GALNT1", "GALNT2", "GALNT3", "GALNT4", "GALNT5","GALNT6", "GALNT7", "GALNT8", "GALNT9", "GALNT10","GALNT11","GALNT12","GALNT13","GALNT14", "GALNT15","GALNT16","GALNT18","GALNT17","ST3GAL1","ST3GAL2","ST3GAL3","ST3GAL4","ST3GAL5", "ST3GAL6","ST6GALNAC1", "ST6GALNAC2",  "ST6GALNAC3","ST6GALNAC4",  "ST6GALNAC5",  "ST6GALNAC6",  "ST6GAL1","ST6GAL2", "ST8SIA1","ST8SIA2","ST8SIA3","ST8SIA4","ST8SIA5","ST8SIA6","STT3A",  "STT3B",  "UGCG","UGGT1",  "UGGT2",  "UGT1A",  "UGT1A1", "UGT1A2P","UGT1A3", "UGT1A4", "UGT1A5", "UGT1A6","UGT1A7", "UGT1A8", "UGT1A9", "UGT1A10","UGT1A11P", "UGT1A12P", "UGT1A13P", "UGT2A1", "UGT2A2","UGT2A3", "UGT2B4", "UGT2B7", "UGT2B10","UGT2B11","UGT2B15","UGT2B17","UGT2B24P", "UGT2B25P","UGT2B26P", "UGT2B27P", "UGT2B28","UGT2B29P", "UGT3A1", "UGT3A2", "UGT8","ALG13",  "ALG14"), ] 
+```
+
+## Anotação de informações de subtipos moleculares e histológicos
+
+De modo a obter informação confiável e validada a respeito do subtipo histológico/molecular das amostras obtidas, utilizamos as informações de um artigo cientifíco que utilizou esse conjunto experimental.
+
+## Anotar dados a partir do artigo
+
+[**Função para seleção de anotação a partir do artigo:**]{.underline}
+
+```{r}
+# Outro modo de fazer a mesma coisa 
+library(tidyverse) 
+slecte <- function(xdata){ 
+  selected=NULL   
+  for (i in rna$submitted_sample_id) {     
+    s = info_amostras_artigo %>%     
+    filter(tissue == 'BRCA') %>%     
+    filter(barcode==i)      
+    selected <- rbind(selected, s)   
+    }   
+return(selected) 
+}
+```
+
+## **Filtragem e anotação dos subtipos moleculares**
+
+Anotamos as informações dos subtipos molecuares à partir da tabela informações das amostras. Isso não é necessário caso essa informação esteja disponível no conjunto de dados.
+
+```{r}
+selected=NULL
+  for (i in rna$submitted_sample_id) {
+    s = info_amostras_artigo %>%
+    filter(tissue == 'BRCA') %>%
+    filter(barcode==i) 
+    selected<-rbind(selected, s)
+  }
+colnames(rna) <-c(colnames(rna)[1:4],"barcode", colnames(rna)[6:22])
+exp=merge(rna, distinct(selected), by="barcode")# distinct paralinhas unicas
+```
+
+**Modificando o nome das colunas e combinando os resultados da busca acima:**
+
+```{r}
+colnames(rna) <- c(colnames(rna)[1:4],"barcode", colnames(rna)[6:22]) 
+exp <- merge(rna, distinct(selected), by="barcode") # distinct para linhas unicas
+```
+
+## Converter para formato de expressão:
+
+Modificar a tabela de expressão de modo que as colunas serão linhas e as linhas colunas no novo objeto. Antes, vamos observar como os dados estão organizados nessa tabela. Apenas as primeiras linhas e algumas colunas de interesse.
+
+```{r}
+exp[1:5,c(1,8:10)]
+```
+
+### [**Função:**]{.underline} **convert_to_df_expression()**
+
+```{r}
+convertdf_to_expression <- function(df=expn, col_sp_names="barcode",                                    col_gene_names="gene_id", col_counts="normalized_read_count"){ require(dplyr)
+  # sample names col 1, gene names col 2 e raw counts col 3 
+  tempa <- df 
+  tempc <- unique(tempa[[col_gene_names]])      
+  tempg <- NULL   
+  for (i in 1:length(tempc)) {
+    tempd=tempa[tempa[,col_gene_names] %in% tempc[i], c(col_sp_names, col_counts)]     
+    tempd=tempd[order(tempd[[col_sp_names]]),] 
+  
+  #order genes     
+  tempe <- data.frame(t(tempd))     
+  #temp uniques rows of final data.frame       
+  tempf <- lapply(tempe[-1,-1], as.numeric)
+  tempf <- as.data.frame(t(unlist(tempf)))
+  colnames(tempf) <- t(tempd)[1,-1] #collumn name == samples names
+  rownames(tempf) <- tempc[i] #rownames == gene(i)
+  assign(paste0("df_",i), tempf)
+  #tempg=rbind(tempg, tempf)   
+  }   
+  
+  df_modified=NULL   
+  for (e in 1:length(tempc)) {    
+    #df_modified=rbind(df_modified, get(paste0("df_",e)))     
+    # Modified to include dfs thas were duplicated and then different number of collumns    
+    df_modified <- dplyr::bind_rows(df_modified, distinct(get(paste0("df_",e))))   
+  } 
+  return(df_modified) }
+```
+
+### [**Executando a função acima:**]{.underline}
+
+Os dados de contagens (expressão dos genes/rnas mensageiros) e os nomes das amostras estão dispostos de forma inversa as requeridas pelas bibliotecas de análise de DEGs, como DESeq2 e EdgeR, onde os genes estão nas colunas e as amostras nas linhas. Basta olhar os exemplos desses programas acima. Por esse motivo, criamos uma função para fazer essa "transposição".
+
+Esta função espera um data frame com apenas três colunas na seguinte ordem: Samples (ids) na primeira coluna, genes (nomes) na segunda coluna e a contagem dos genes na terceira coluna.
+
+Por isso, vamos selecionar apenas essas do objeto rna.
+
+```{r}
+# Contagens normalizadas 
+expn <- select(.data = exp, c("barcode", "gene_id", "normalized_read_count", "subtype")) 
+# Contagens brutas (não normalizadas) 
+expr <- select(.data = exp, c("barcode", "gene_id", "raw_read_count", "subtype"))
+```
+
+```{r}
+# Para a tabela com contagens normalizadas 
+expn_new <- convertdf_to_expression(df = as.data.frame(expn), col_sp_names = "barcode", col_gene_names = "gene_id",  col_counts="normalized_read_count") 
+
+# Para a tabela com contagens brutas 
+expr_new <- convertdf_to_expression(df = expr, col_sp_names = "barcode", col_gene_names = "gene_id", col_counts="raw_read_count")
+```
+
+Vamos observar como ficou organizado os dados destas tabelas após a modificação.
+
+```{r}
+expn_new[1:5,1:5]
+```
+
+Note que cada gene está distribuído no lugar das colunas e nas linhas estão distribuídas as contagens de cada gene respectivo. A tabela expn contém as contagens normalizadas, como obtida do banco de dados e preferidas ao se trabalhar com a biblioteca EDGER. Enquanto que a tabela expr contém os dados com contagens brutas, as quais são esperadas quando se trabalha com a biblioteca DESeq2.
+
+```{r}
+selecao_amostras_artigo <- NULL    
+for (i in 1:nrow(expn)) { 
+  tryCatch({B= 
+    cbind(subset(info_amostras_artigo, 
+    unique(info_amostras_artigo$barcode)==unique(rownames(expn)[i]) & 
+    info_amostras_artigo$tissue =="BRCA"),  
+    expn[i,])        
+  selecao_amostras_artigo = rbind(selecao_amostras_artigo,B)         
+  stop("The value was not found on the brca_contagens you looking for !")}, 
+  error = function(e){cat("ERROR :",conditionMessage(e), "\n")})    
+  }       
+rm(B,i) 
+```
+
+# 3 EDGER
+
+## **Análise de Genes Diferencialmente Expressos Utilizando a biblioteca edgeR.**
+
+```{r}
+library(edgeR)
+```
+
+## Transformar os valores das contagens para tipo numérico
+
+```{r}
+expn_new[1:5,1:3]
+```
+
+## 3.1 Para estimativa de disperção comum e dispersão tagwise em única corrida
+
+Aqui não utilizamos a filtragem para valores baixos, devido aos dados estarem normalizados e assim serem valores muito pequenos. Em caso de utilização de contagens brutas (raw counts), como esperado pelo pacote DESeq2, utilizamos um valor de corte (como definido pelas linhas mutadas abaixo).
+
+```{r}
+DGE <- DGEList(counts=expr_new, group=selecao_amostras_artigo$subtype) 
+DGE$samples 
+group=selecao_amostras_artigo$subtype 
+keep <- filterByExpr(y = DGE, group=group,  min_count = 1) 
+DGE <- DGE[keep, , keep.lib.sizes=T] 
+DGE <- normLibSizes(DGE) 
+DGE <- estimateCommonDisp(DGE)
+```
+
+## 3.2 Gerado as comparacoes
+
+```{r}
+lumAvsLumB <- exactTest(DGE, pair=c("LumA", "LumB")) 
+lumAvsLumB <- as.data.frame(topTags(lumAvsLumB))  
+lumAvsBasal <- exactTest(DGE, pair=c("LumA", "Basal")) 
+lumAvsBasal <- as.data.frame(topTags(lumAvsBasal))  
+lumAvsHer2 <- exactTest(DGE, pair=c("LumA", "Her2")) 
+lumAvsHer2 <- as.data.frame(topTags(lumAvsHer2))  
+LumBvsBasal <- exactTest(DGE, pair=c("LumB", "Basal")) 
+LumBvsBasal <- as.data.frame(topTags(LumBvsBasal))  
+LumBvsHer2 <- exactTest(DGE, pair=c("LumB", "Her2")) 
+LumBvsHer2 <- as.data.frame(topTags(LumBvsHer2)) 
+BasalvsHer2 <- exactTest(DGE, pair=c("Basal", "Her2")) 
+BasalvsHer2 <- as.data.frame(topTags(BasalvsHer2))
+```
+
+## 3.3 Definindo up ou Down de acordo ao cutoff
+
+```{r}
+comparations<- c("lumAvsLumB","lumAvsBasal","lumAvsHer2","LumBvsBasal", "LumBvsHer2","BasalvsHer2")
+
+# Loop for
+for (i in comparations) {
+  assign(paste(i),
+         get(i) %>%   mutate(color = case_when(logFC > cutoff1 ~ "Up regulated", 
+                           logFC < cutoff2 ~ "Down Regulated",  
+                           TRUE ~ "Not Differentially Expressed"))) 
+  }
+lumAvsLumB <- lumAvsLumB %>%   
+  mutate(color = case_when(logFC > cutoff1 ~ "Up regulated", 
+                           logFC < cutoff2 ~ "Down Regulated",  
+                           TRUE ~ "Not Differentially Expressed"))
+```
+
+## **3.4 Exportação dos resultados.**
+
+```{r}
+write.table(x = lumAvsLumB, file = "Edge_lumAvsLumB.txt", sep = "\t")  
+write.table(x = lumAvsBasal, file = "Edge_lumAvsBasal.txt", sep = "\t")  
+write.table(x = lumAvsHer2, file = "Edge_lumAvsHer2.txt", sep = "\t")  
+write.table(x = LumBvsBasal, file = "Edge_LumBvsBasal.txt", sep = "\t")  
+write.table(x = LumBvsHer2, file = "Edge_LumBvsHer2.txt", sep = "\t")  
+write.table(x = BasalvsHer2, file = "Edge_BasalvsHer2.txt", sep = "\t")
+```
+
+## 3.4 Visualização Gráfica
+
+### **PlotMD do pacote edger**
+
+```{r}
+plotMD(lumAvsLumB)
+```
+
+### **plotMDx: Exemplo para o conjunto de dados lumAvsLumB**
+
+Defina valores "cutoff1" e "cutoff2" que definem os valores de corte para "[*up*]{.underline}" e ["*down regulated*",]{.underline}
+
+```{r}
+library(ggplot2) 
+library(dplyr)
+
+cutoff1 <- 1  # primeiro valor de corte(up)
+cutoff2 <- -1  # segundo valor de corte(down)
+
+# Substitua pelo seu segundo valor de corte  
+grafico <- ggplot(data = lumAvsLumB, aes(x = logCPM, y = logFC, label = rownames(lumAvsLumB))) +   geom_point(aes(color = Color)) +   geom_text(hjust = 1, vjust = 1, size = 2) +  
+  # Adicionar os nomes dos genes   
+  labs(x = "log CPM", y = "Log Fold Change") +   ggtitle("Differentially Expressed Genes: lumA vs LumB") +   scale_color_manual(values = c("Up regulated" = "blue", "Down Regulated" = "red", "Not Differentially Expressed" = "black")) + 
+  # Defina as cores aqui   
+  theme_minimal() # Mostra o gráfico print(grafico)
+plot(lumAvsLumB)
+```
+
+### [**Plot Master**]{.underline}**: plot modificado.**
+
+```{r}
+# valores de corte 
+cutoff1 <- 1  # primeiro valor de corte(up) 
+cutoff2 <- -1  # segundo valor de corte(down) 
+
+# Criar cores únicas para cada gene 
+cores_unicas <- rainbow(length(rownames(lumAvsLumB))) 
+lumAvsLumB <- lumAvsLumB %>%   
+  mutate(color = cores_unicas[match(rownames(lumAvsLumB), 
+                                    unique(rownames(lumAvsLumB)))]) 
+grafico <- ggplot(data = lumAvsLumB, aes(x = logCPM, y = logFC)) +   
+  geom_point(aes(color = as.factor(rownames(lumAvsLumB))), size = 3) +   
+  geom_text(hjust = 1, vjust = 1, size = 1, aes(label = "")) +  # Não exibir o nome do gene no gráfico      
+labs(x = "log CPM", y = "Log Fold Change") +   
+  ggtitle("Differentially Expressed Genes: lumA vs LumB") +   
+  scale_color_manual(values = cores_unicas, name = "Genes", 
+                     guide = guide_legend(ncol = 2)) +  
+  # Defina as cores e a legenda aqui   
+  theme_minimal() +   geom_hline(yintercept = c(-1, 1), linetype = "dashed", color = "black")# Adicione as linhas no eixo y # Mostra o gráfico print(grafico)
+plot(grafico)
+```
+
+# DESEQ2
+
+## **Análise de Genes Diferencialmente Expressos Utilizando a biblioteca DESeq2.**
+
+```{r include=FALSE}
+
+write.table(x = expr_new, file = "counts_exprnew.txt", sep = "\t")  
+write.table(x = lumAvsLumB, file = "lumAvsLumB.txt", sep = "\t")  
+
+
+
+dds <- DESeq2::DESeqDataSetFromMatrix(countData=expr_new, 
+                              colData=selecao_amostras_artigo[,c(2,4)], 
+                              design=~subtype)
+
+# To exclude low counts
+
+#keep <- rowSums(counts(dds) >= 10)
+#dds <- dds[keep,]
+
+# Run deseq2
+dds <- DESeq2::DESeq(dds)
+
+DESeq2::results(dds, alpha = 0.05, lfcThreshold =1)
+
+for (i in DESeq2::resultsNames(dds)) {
+  assign(paste0("res_",i), 
+         DESeq2::results(dds, name= i, alpha = 0.05, lfcThreshold =1))
+}
+
+# Visualize 'DEGs' Up and Down regulated
+for (i in grep("res_", ls(), value = TRUE)) {
+  assign(paste0("DEG_UP_",i), as.data.frame(subset(get(i),get(i)$log2FoldChange > 1 & get(i)$padj < 0.05)))
+  assign(paste0("DEG_DOWN_",i),as.data.frame(subset(get(i),get(i)$log2FoldChange < 1 & get(i)$padj < 0.05)))
+}
+
+```
+
+## Vamos dar uma olhada em um dos resultados
+
+```{r}
+DEG_DOWN_res_subtype_Her2_vs_Basal
+
+```
