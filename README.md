@@ -16,7 +16,6 @@ Esse é um workflow escrito na linguagem de programação R para análise de gen
 
 Dependências:
 
-{undefined include=FALSE}
 library("DESeq2") 
 library("dplyr") 
 library("edgeR")
@@ -28,17 +27,12 @@ FUN
 
 00 Entrada de dados
 
-{r include=FALSE}
 rna <- read.delim("D:/brca_eua_atual/exp_seq.BRCA-US.tsv") 
 info_amostras_artigo <- read.csv("D:/brca_eua_atual/info_amostras_artigo.csv")
 
-Manter Somente os genes das glycosiltransferases
-
 Selecionamos apenas alguns genes de interesse. Os genes foram selecionados da forma
-
 à seguir à partir da lista abaixo.
 
-{r include=FALSE}
 rna <- as.data.frame(rna) 
 rna <- rna[rna$gene_id %in% c("ALG10B","ALG6",  "ALG8",  "A4GALT","A4GNT",  "ALG14"), ] 
 
@@ -50,7 +44,6 @@ Anotar dados a partir do artigo
 
 Função para seleção de anotação a partir do artigo:
 
-{r}
 # Outro modo de fazer a mesma coisa 
 library(tidyverse) 
 selectFromDataFrame <- function(xdata){ 
@@ -68,7 +61,6 @@ Filtragem e anotação dos subtipos moleculares
 
 Anotamos as informações dos subtipos molecuares à partir da tabela informações das amostras. Isso não é necessário caso essa informação esteja disponível no conjunto de dados.
 
-{r}
 selected=NULL
   for (i in rna$submitted_sample_id) {
     s = info_amostras_artigo %>%
@@ -76,12 +68,12 @@ selected=NULL
     filter(barcode==i) 
     selected<-rbind(selected, s)
   }
+  
 colnames(rna) <-c(colnames(rna)[1:4],"barcode", colnames(rna)[6:22])
 exp=merge(rna, distinct(selected), by="barcode")# distinct paralinhas unicas
 
 Modificando o nome das colunas e combinando os resultados da busca acima:
 
-{r}
 colnames(rna) <- c(colnames(rna)[1:4],"barcode", colnames(rna)[6:22]) 
 exp <- merge(rna, distinct(selected), by="barcode") # distinct para linhas unicas
 
@@ -95,13 +87,11 @@ Esta função espera um data frame com apenas três colunas na seguinte ordem: S
 
 Por isso, vamos selecionar apenas essas do objeto rna.
 
-{r include=FALSE}
 # Contagens normalizadas 
 expn <- select(.data = exp, c("barcode", "gene_id", "normalized_read_count", "subtype")) 
 # Contagens brutas (não normalizadas) 
 expr <- select(.data = exp, c("barcode", "gene_id", "raw_read_count", "subtype"))
 
-{r include=FALSE}
 library(DEGTCGAUtils)
 
 # Para a tabela com contagens normalizadas 
@@ -126,14 +116,12 @@ library(edgeR)
 
 Visualizar os dados
 
-{r}
 expn_new[1:5,1:3]
 
 3.1 Para estimativa de disperção comum e dispersão tagwise em única corrida
 
 Aqui não utilizamos a filtragem para valores baixos, devido aos dados estarem normalizados e assim serem valores muito pequenos. Em caso de utilização de contagens brutas (raw counts), como esperado pelo pacote DESeq2, utilizamos um valor de corte (como definido pelas linhas mutadas abaixo).
 
-{r}
 DGE <- DGEList(counts=expr_new, group=selecao_amostras_artigo$subtype) 
 DGE$samples 
 group=selecao_amostras_artigo$subtype 
@@ -144,7 +132,6 @@ DGE <- estimateCommonDisp(DGE)
 
 3.2 Gerado as comparacoes
 
-{r}
 Edge_LumAvsLumB <- exactTest(DGE, pair=c("LumA", "LumB")) 
 Edge_LumAvsLumB <- as.data.frame(topTags(lumAvsLumB))  
 Edge_LumAvsBasal <- exactTest(DGE, pair=c("LumA", "Basal")) 
@@ -160,7 +147,6 @@ Edge_BasalvsHer2 <- as.data.frame(topTags(BasalvsHer2))
 
 3.3 Definindo up ou Down de acordo ao cutoff
 
-{r}
 comparations<- c("Edge_LumAvsLumB","Edge_LumAvsBasal","Edge_LumAvsHer2","Edge_LumBvsBasal", "Edge_LumBvsHer2","Edge_BasalvsHer2")
 
 # Loop for
@@ -182,7 +168,6 @@ for (i in comparations) {
 
 3.4 Exportação dos resultados.
 
-{r}
 write.table(x = lumAvsLumB, file = "Edge_lumAvsLumB.txt", sep = "\t")  
 write.table(x = lumAvsBasal, file = "Edge_lumAvsBasal.txt", sep = "\t")  
 write.table(x = lumAvsHer2, file = "Edge_lumAvsHer2.txt", sep = "\t")  
@@ -194,19 +179,16 @@ write.table(x = BasalvsHer2, file = "Edge_BasalvsHer2.txt", sep = "\t")
 
 PlotMD do pacote edger
 
-{r}
 plotMD(Edge_LumAvsLumB[,-5])
 
 Plot Master: plot modficado.
 
-{r}
 PlotDEG(XData = Edge_BasalvsHer2, Title = "Differentially Expressed Genes: Basal vs Her2")
 
 DESEQ2
 
 Análise de Genes Diferencialmente Expressos Utilizando a biblioteca DESeq2.
 
-{r include=FALSE}
 
 write.table(x = expr_new, file = "counts_exprnew.txt", sep = "\t")  
 write.table(x = lumAvsLumB, file = "lumAvsLumB.txt", sep = "\t")  
@@ -236,7 +218,6 @@ assign(paste0("res_DESeq2_Basal_Her2"), DESeq2::results(dds, contrast=c("subtype
 
 Gerar tabelas para Genes Up and Down regulated
 
-{r}
 # Visualize 'DEGs' Up and Down regulated
 for (i in grep("res_DESeq2", ls(), value = TRUE)) {
   assign(paste0("DEG_UP_",i), as.data.frame(subset(get(i),get(i)$log2FoldChange > 1 & get(i)$padj < 0.05)))
@@ -245,7 +226,6 @@ for (i in grep("res_DESeq2", ls(), value = TRUE)) {
 
 Exportar a tabela de resultados
 
-{r}
 # Down regulated
 write.table(x = DEG_DOWN_res_DESeq2_Basal_Her2, file = "DEG_DOWN_res_DESeq2_Basal_Her2.txt", sep = "\t")  
 write.table(x = DEG_DOWN_res_DESeq2_LumA_Basal, file = "DEG_DOWN_res_DESeq2_LumA_Basal.txt", sep = "\t")  
